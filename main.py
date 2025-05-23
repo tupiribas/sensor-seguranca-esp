@@ -1,81 +1,107 @@
-# import time
-# import mpu6050
-# from machine import I2C, Pin
-# import math
+from network import WLAN, STA_IF
+from time import sleep
+from machine import Pin, unique_id
+from utime import gmtime, mktime, localtime
+from ntptime import settime
+from urequests import post
+from ujson import dumps
 
-# print('\n\n')
+CHIP_ID = unique_id()
 
-# # Configuração dos pinos I2C
-# scl_pin = Pin(13, Pin.OUT)
-# sda_pin = Pin(12, Pin.OUT)
-# i2c = I2C(scl=scl_pin, sda=sda_pin)
-# accelerometer = mpu6050.accel(i2c)
+SSID = 'VIVOFIBRA-WIFI6-B760'
+SENHA = '7AFH73Yq39AF4AN'
 
-# # Configuração do pino do buzzer
-# # Substitua 16 pelo pino GPIO ao qual seu buzzer está conectado
-# buzzer_pin = Pin(16, Pin.OUT)
+TOKEN = 'gGhTWgsXkhw3gvh3lI6L'
+# Endpoint HTTP do ThingsBoard
+URL = 'https://thingsboard.cloud/api/v1/{}/telemetry'.format(TOKEN)
+HEADERS = {'Content-Type': 'application/json'}
 
-# # Fase de linha de base
-# num_leituras_base = 100
-# delay_ms_base = 20
-# magnitudes_base = []
-# print("Estabelecendo linha de base...")
-# for _ in range(num_leituras_base):
-#     accel_values = accelerometer.get_values()
-#     acx = accel_values['AcX']
-#     acy = accel_values['AcY']
-#     acz = accel_values['AcZ']
-#     magnitude = math.sqrt(acx**2 + acy**2 + acz**2)
-#     magnitudes_base.append(magnitude)
-#     time.sleep_ms(delay_ms_base)
 
-# linha_base = sum(magnitudes_base) / len(magnitudes_base)
-# print("Linha de base estabelecida:", linha_base)
+def sincronizar_hora_ntp():
+    '''
+        Necessário, pois o ESP3266 me fornece apenas a data atual da sua 
+        fabricação
+    '''
+    try:
+        settime()
+        print('Hora sincronizada via NTP')
+    except OSError as e:
+        print(f'Erro ao sincronizar hora via NTP: {e}')
 
-# # Fase de monitoramento
-# limiar_desvio = 500  # Ajuste este valor de acordo com seus testes
-# delay_ms_monitor = 100
-# movimento_detectado = False
-# tempo_alarme = 2000  # Tempo em milissegundos que o alarme soará
 
-# print("Monitorando movimento...")
-# while True:
-#     accel_values = accelerometer.get_values()
-#     acx = accel_values['AcX']
-#     acy = accel_values['AcY']
-#     acz = accel_values['AcZ']
-#     magnitude_atual = math.sqrt(acx**2 + acy**2 + acz**2)
+def formatar_utc_tempoatual(tempojunto_lista):
+    '''Formatar no horário ISO do tempo atual'''
+    ano, mes, dia, hora, minuto, segundo, _, _ = tempojunto_lista
+    return "{:02d}/{:02d}/{:04d} - {:02d}:{:02d}:{:02d}".format(
+        dia, mes, ano, hora, minuto, segundo)
 
-#     desvio = abs(magnitude_atual - linha_base)
 
-#     if desvio > limiar_desvio and not movimento_detectado:
-#         print("MOVIMENTO DETECTADO! Desvio:", desvio)
-#         movimento_detectado = True
-#         # Ativa o buzzer (HIGH) - pode precisar ser 0 dependendo da conexão
-#         buzzer_pin.value(1)
-#         tempo_inicio_alarme = time.ticks_ms()
-#     elif movimento_detectado and (time.ticks_ms() - tempo_inicio_alarme > tempo_alarme):
-#         buzzer_pin.value(0)  # Desativa o buzzer (LOW)
-#         movimento_detectado = False
-#         print("Alarme desligado.")
-#     elif not movimento_detectado:
-#         # Garante que o buzzer esteja desligado quando não há movimento
-#         buzzer_pin.value(0)
+def obter_hora_local_salvador():
+    """Obtém o timestamp UTC e ajusta para o horário de Salvador (UTC-3)."""
+    utc_tuple = gmtime()
+    # Subtrai 3 horas (3 * 3600 segundos) do timestamp Unix
+    timestamp_local_unix = mktime(utc_tuple) - (3 * 3600)
+    return localtime(timestamp_local_unix)
 
-#     print("Desvio:", desvio, "Alarme ativo:", movimento_detectado)
-#     time.sleep_ms(delay_ms_monitor)
-from machine import Pin, PWM
-import time
 
-buzzer_pin = Pin(4, Pin.OUT)  # Define o pino do buzzer como um pino digital comum
-buzzer_pwm = PWM(buzzer_pin)  # Inicializa o PWM no pino
+def formatar_chip_id(chip_id: bytes):
+    return ''.join([':{:02x}'.format(b) for b in chip_id]).upper().lstrip(':')
 
-frequencia = 1000  # Frequência do som em Hertz (pode variar)
-duty_cycle = 600   # Ciclo de trabalho (de 0 a 1023, controla o volume)
 
-buzzer_pwm.freq(frequencia)
-buzzer_pwm.duty(duty_cycle)
+payload = {
+    "group_id": 5,
+    "original_filename": 'roteiro_extensao.pdf',
+    "file_hash_sha256": '493B4630E41348B12F3C4C664D70BCD91B56B6C37E3CFDB8248500705E1DE06D',
+    "download_link": 'https://drive.google.com/open?id=1C5TI6AEwAU2vqJxoUVnT6vdv3yfPG6Uh&usp=drive_fs',
+    "submission_timestamp_utc": formatar_utc_tempoatual(
+        obter_hora_local_salvador()
+    ),
+    "chip_id": formatar_chip_id(chip_id=CHIP_ID)
+}
 
-time.sleep(5)  # O buzzer soará por 5 segundos
 
-buzzer_pwm.deinit()  # Desliga o PWM no pino
+def conectar_wifi():
+    wlan = WLAN(STA_IF)
+    if not wlan.isconnected():
+        print('Conectando ao Wi-Fi')
+        try:
+            wlan.active(True)
+            wlan.connect(SSID, SENHA)
+            while not wlan.isconnected():
+                print(end='.')
+                sleep(1)
+            print('Conectado ao Wi-Fi!')
+            ip_info = wlan.ifconfig()
+            print('Endereço IP:', ip_info)
+            sleep(2)
+            return wlan
+        except Exception as e:
+            print(f'Falha ao conectar ao Wi-Fi. Erro: {e}')
+    else:
+        print("Você já está conectado! Tentando reconectar para obter novo IP")
+
+
+def publicar_mensagem():
+    try:
+        response = post(
+            url=URL, headers=HEADERS, data=dumps(payload))
+        print('Enviado: ', payload, '| Status: ', response.status_code)
+        response.close()
+    except Exception as e:
+        print('Falha ao enviar informações para o servidor: ERROR >>> ', e)
+    sleep(5)
+
+
+led = Pin(2, Pin.OUT)
+
+# Execução principal
+wlan = conectar_wifi()
+
+try:
+    if wlan.isconnected():
+        sincronizar_hora_ntp()
+        publicar_mensagem()
+except Exception as e:
+    print('Serviço ou Wi-Fi desconectado. Tentando reconectar...')
+    print(f'Erro inesperado no loop principal: {e}')
+sleep(5)
