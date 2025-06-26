@@ -1,0 +1,16 @@
+adafruit-ampy==1.1.0
+bitarray==3.4.3
+bitstring==4.3.1
+cffi==1.17.1
+click==8.2.1
+colorama==0.4.6
+cryptography==45.0.4
+ecdsa==0.19.1
+esptool==4.9.0
+intelhex==2.3.0
+pycparser==2.22
+pyserial==3.5
+python-dotenv==1.1.1
+PyYAML==6.0.2
+reedsolo==1.7.0
+six==1.17.0
