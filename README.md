@@ -57,7 +57,7 @@ Conecte o sensor MPU6050 ao ESP8266 da seguinte forma:
 
 2.  **Sessão `📊 Dashboard e Resultados em Tempo Real`:**
     `🎥 Configuração e Detecção em Ação` para agrupar as saídas que mostram o projeto funcionando.
-    * **`Saída do Terminal do ESP8266`:** Mantive a imagem existente, mas adicionei uma nota sobre o `limiar_desvio=300` ter sido utilizado neste exemplo, conectando a configuração de software com o resultado prático.
+    * **`Saída do Terminal do ESP8266`:** ![alt text](image-5.png)
     * **`Status de Movimento (movimento-status)`:** Destacando a transição de `0` para `1` e vice-versa, 1 para movimento e 0 para a ausência do movimento.
         * **Imagem adicionada:** ![Destacando a transição de `0` para `1` e vice-versa, 1 para movimento e 0 para a ausência do movimento.](image-1.png)
     * **`Magnitude da Aceleração (aceleracao-magnitude)`:**
